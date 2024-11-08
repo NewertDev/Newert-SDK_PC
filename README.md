@@ -44,7 +44,7 @@ Windows, macOS, Linux에서 사용 가능</br>
 
 ---
 ### 개발 환경
-python >= 3.22.2(stable)
+python >= 3.9.13(stable)
 </br>
 </br>
 ### 문의 및 지원
