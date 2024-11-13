@@ -4,10 +4,11 @@ from bleak import BleakScanner, BleakClient
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QListWidget, QVBoxLayout, QHBoxLayout, \
     QWidget, QMessageBox
 from qasync import QEventLoop, asyncSlot
-from newert_utils import UUIDs, DataParser
 from scipy.interpolate import interp1d
 import numpy as np
 import time
+
+from newert_utils import UUIDs, DataParser
 
 
 class BleController(QMainWindow):
