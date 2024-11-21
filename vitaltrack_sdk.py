@@ -4,12 +4,7 @@ from bleak import BleakScanner, BleakClient
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QListWidget, QVBoxLayout, QHBoxLayout, \
     QWidget, QMessageBox
 from qasync import QEventLoop, asyncSlot
-from scipy.interpolate import interp1d
-import numpy as np
-import time
-
 from newert_utils import UUIDs, DataParser
-
 
 class BleController(QMainWindow):
     def __init__(self):
@@ -25,13 +20,6 @@ class BleController(QMainWindow):
         self.address = ''
         self.device_id = ''
         self.client = None
-
-        # Buffers for data and timing
-        self.ppg_buffer = []
-        self.acc_buffer = []
-        self.gyro_buffer = []
-        self.mag_buffer = []
-        self.last_timestamp = time.time()
 
         # Timer 설정
         self.timer = QTimer(self)
@@ -133,92 +121,10 @@ class BleController(QMainWindow):
 
     def notification_handler(self, sender, data):
         parser = DataParser()
-        try:
-            parsed_data = parser.parse_data(bytes(data))  # Parse the incoming data
-        except Exception as e:
-            print(f"Error parsing data: {e}")
-            return
-
-        # Log parsed data to inspect its structure if 'ppg' key is missing
+        parsed_data = parser.parse_data(bytes(data))  # bytearray를 bytes로 변환하여 전달
         for item in parsed_data:
-            if not all(key in item for key in ['ppg', 'acc', 'gyro', 'mag']):
-                print(f"Unexpected data format: {item}")
-                continue  # Skip items that don't have all required keys
-
-            # Buffer data if all keys are present
-            self.ppg_buffer.append(item['ppg'])
-            self.acc_buffer.append(item['acc'])
-            self.gyro_buffer.append(item['gyro'])
-            self.mag_buffer.append(item['mag'])
+            print(item)
             self.update_data_display(str(item))
-
-
-        # Check if one second has passed
-        current_timestamp = time.time()
-        if current_timestamp - self.last_timestamp >= 1.0:
-            self.process_and_print_data()
-            self.last_timestamp = current_timestamp
-
-    import numpy as np
-    from scipy.interpolate import interp1d
-
-    def process_and_print_data(self):
-        # Interpolate each buffer to 50 points, with support for 3D data
-        def interpolate_data(buffer, num_points=50):
-            buffer = np.array(buffer)  # Ensure buffer is a NumPy array
-            if len(buffer) < 2:
-                # Handle 1D and 3D data by matching the shape of buffer
-                shape = (num_points,) + buffer.shape[1:] if buffer.ndim > 1 else (num_points,)
-                return np.tile(buffer[0], shape) if len(buffer) > 0 else np.zeros(shape)
-
-            # Interpolation
-            x = np.linspace(0, len(buffer) - 1, num=len(buffer))
-            f = interp1d(x, buffer, kind='linear', axis=0, fill_value="extrapolate")
-            x_new = np.linspace(0, len(buffer) - 1, num=num_points)
-            return f(x_new)
-
-        # Interpolate each sensor data to 50 points, or use a default value if it fails
-        try:
-            ppg_interp = interpolate_data(self.ppg_buffer, 50).tolist()
-        except Exception as e:
-            print(f"PPG interpolation error: {e}")
-            ppg_interp = [0] * 50  # Default to zeros if interpolation fails
-
-        try:
-            acc_interp = interpolate_data(self.acc_buffer, 50).tolist()
-        except Exception as e:
-            print(f"ACC interpolation error: {e}")
-            acc_interp = [[0, 0, 0]] * 50
-
-        try:
-            gyro_interp = interpolate_data(self.gyro_buffer, 50).tolist()
-        except Exception as e:
-            print(f"Gyro interpolation error: {e}")
-            gyro_interp = [[0, 0, 0]] * 50
-
-        try:
-            mag_interp = interpolate_data(self.mag_buffer, 50).tolist()
-        except Exception as e:
-            print(f"Mag interpolation error: {e}")
-            mag_interp = [[0, 0, 0]] * 50
-
-        # Structure the result
-        result = {
-            "ppg": ppg_interp,
-            "acc": acc_interp,
-            "gyro": gyro_interp,
-            "mag": mag_interp
-        }
-
-        # Print the structured result
-        print("Result:", result)
-        # self.update_data_display(str(result))
-
-        # Clear buffers after processing
-        self.ppg_buffer.clear()
-        self.acc_buffer.clear()
-        self.gyro_buffer.clear()
-        self.mag_buffer.clear()
 
     def disable_button_state(self, trigger):
         self.start_button.setDisabled(trigger)
