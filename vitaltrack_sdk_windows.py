@@ -7,9 +7,9 @@ from qasync import QEventLoop, asyncSlot
 from scipy.interpolate import interp1d
 import numpy as np
 import time
+from newert_pro import HeartRateAnalyzer
 
 from newert_utils import UUIDs, DataParser
-
 
 class BleController(QMainWindow):
     def __init__(self):
@@ -54,6 +54,7 @@ class BleController(QMainWindow):
         self.start_button.clicked.connect(self.start_measure)
         self.stop_button.clicked.connect(self.stop_measure)
         self.disable_button_state(True)
+        self.hr_analyzer = HeartRateAnalyzer(cal_hr_time=5)
 
     def setup_ui(self):
         main_frame = QHBoxLayout()
@@ -142,7 +143,7 @@ class BleController(QMainWindow):
         # Log parsed data to inspect its structure if 'ppg' key is missing
         for item in parsed_data:
             if not all(key in item for key in ['ppg', 'acc', 'gyro', 'mag']):
-                print(f"Unexpected data format: {item}")
+                # print(f"Unexpected data format: {item}")
                 continue  # Skip items that don't have all required keys
 
             # Buffer data if all keys are present
@@ -150,12 +151,12 @@ class BleController(QMainWindow):
             self.acc_buffer.append(item['acc'])
             self.gyro_buffer.append(item['gyro'])
             self.mag_buffer.append(item['mag'])
-            self.update_data_display(str(item))
-
+            # self.update_data_display(str(item))
 
         # Check if one second has passed
         current_timestamp = time.time()
         if current_timestamp - self.last_timestamp >= 1.0:
+            # self.process_and_print_data()
             self.process_and_print_data()
             self.last_timestamp = current_timestamp
 
@@ -169,13 +170,15 @@ class BleController(QMainWindow):
             if len(buffer) < 2:
                 # Handle 1D and 3D data by matching the shape of buffer
                 shape = (num_points,) + buffer.shape[1:] if buffer.ndim > 1 else (num_points,)
-                return np.tile(buffer[0], shape) if len(buffer) > 0 else np.zeros(shape)
+                result = np.tile(buffer[0], shape) if len(buffer) > 0 else np.zeros(shape)
+                return np.round(result, decimals=3)  # Round to 3 decimal places
 
             # Interpolation
             x = np.linspace(0, len(buffer) - 1, num=len(buffer))
             f = interp1d(x, buffer, kind='linear', axis=0, fill_value="extrapolate")
             x_new = np.linspace(0, len(buffer) - 1, num=num_points)
-            return f(x_new)
+            result = f(x_new)
+            return np.round(result, decimals=3)  # Round to 3 decimal places
 
         # Interpolate each sensor data to 50 points, or use a default value if it fails
         try:
@@ -211,8 +214,14 @@ class BleController(QMainWindow):
         }
 
         # Print the structured result
-        print("Result:", result)
-        # self.update_data_display(str(result))
+        # print("Result:", result)
+
+        hr_value, filter_list = self.hr_analyzer.update_hr(ppg_interp, acc_interp)
+        print(f"Heart Rate: {hr_value}")
+        print(f"Filter List: {filter_list}")
+
+
+        self.update_data_display("1 second data has been collected. Check your terminal.")
 
         # Clear buffers after processing
         self.ppg_buffer.clear()
