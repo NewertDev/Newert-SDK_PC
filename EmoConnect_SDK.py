@@ -1,14 +1,14 @@
 import asyncio
+import time
+import requests
+import re
 from PySide6.QtCore import QTimer
 from bleak import BleakScanner, BleakClient
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QListWidget, QVBoxLayout, QHBoxLayout, \
-    QWidget, QMessageBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QListWidget, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox
 from qasync import QEventLoop, asyncSlot
 from scipy.interpolate import interp1d
 import numpy as np
-import time
-from newert_pro import HeartRateAnalyzer
-from license_manager import LicenseManager
+import emoconnect_pro as ep
 from newert_utils import UUIDs, DataParser
 
 class BleController(QMainWindow):
@@ -26,14 +26,14 @@ class BleController(QMainWindow):
         self.device_id = ''
         self.client = None
 
-        # Buffers for data and timing
+        # 데이터 및 타이밍을 위한 버퍼
         self.ppg_buffer = []
         self.acc_buffer = []
         self.gyro_buffer = []
         self.mag_buffer = []
         self.last_timestamp = time.time()
 
-        # Timer 설정
+        # 타이머 설정
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.generate_test_data)
 
@@ -54,24 +54,11 @@ class BleController(QMainWindow):
         self.start_button.clicked.connect(self.start_measure)
         self.stop_button.clicked.connect(self.stop_measure)
         self.disable_button_state(True)
-        self.hr_analyzer = HeartRateAnalyzer(cal_hr_time=5)
 
-        self.license_manager = LicenseManager()
+        # 라이선스는 선택사항입니다.
+        self.license_manager = ep.LicenseManager()  # subscribe_device() 메서드 포함
+        self.user_license = input("Enter your license if available (press Enter to skip): ").strip()
         self.hr_analyzer = None
-        self.check_license()
-
-    def check_license(self):
-        """라이선스를 확인하고 권한이 있는 경우 HeartRateAnalyzer를 활성화합니다."""
-        if self.license_manager.is_license_valid():
-            self.hr_analyzer = HeartRateAnalyzer(cal_hr_time=5)
-            print("Pro 권한 확인 완료.")
-
-
-        else:
-            self.hr_analyzer = None
-            self.hr_analyzer = HeartRateAnalyzer(cal_hr_time=5)
-            print("Pro 권한 확인 완료.")
-            QMessageBox.warning(self, "라이선스 오류", "Pro 기능을 활성화합니다..")
 
     def setup_ui(self):
         main_frame = QHBoxLayout()
@@ -111,15 +98,33 @@ class BleController(QMainWindow):
         devices = await BleakScanner.discover()
         for device in devices:
             if device.name and (device.name.startswith("VitalTrack") or device.name.startswith("EmoConnect")):
+                # 예: "EmoConnect v1.0(A107) - AA:BB:CC:DD:EE:FF"
                 self.device_list.addItem(f"{device.name} - {device.address}")
 
     @asyncSlot()
     async def connect_to_device(self):
         selected_item = self.device_list.currentItem()
         if selected_item:
-            self.device_id, self.address = selected_item.text().split(" - ")
+            # 선택된 항목에서 device 문자열과 address 분리
+            full_device_str, self.address = selected_item.text().split(" - ")
+            # 정규식을 사용하여 괄호 안의 내용을 추출 (예: "A107")
+            match = re.search(r'\((.*?)\)', full_device_str)
+            if match:
+                self.device_id = match.group(1)
+            else:
+                self.device_id = full_device_str
+
             try:
                 await self.connect_and_receive_data(self.address)
+                # BLE 연결 후, device_id와 (옵션) 라이선스를 서버로 전송하여 라이선스 검증 수행
+                valid = self.license_manager.subscribe_device(self.user_license, self.device_id)
+                print("valid", valid)
+                if valid:
+                    self.hr_analyzer = ep.HeartRateAnalyzer(cal_hr_time=5)
+                    print("Pro 기능 활성화됨.")
+                else:
+                    self.hr_analyzer = None
+                    print("Pro 기능 미활성화, 기본 기능만 사용됩니다.")
             except Exception as e:
                 print(f"Error connecting to device: {e}")
                 QMessageBox.critical(self, "연결 오류", "장치 연결 중 오류가 발생했습니다.")
@@ -152,57 +157,43 @@ class BleController(QMainWindow):
     def notification_handler(self, sender, data):
         parser = DataParser()
         try:
-            parsed_data = parser.parse_data(bytes(data))  # Parse the incoming data
+            parsed_data = parser.parse_data(bytes(data))
         except Exception as e:
             print(f"Error parsing data: {e}")
             return
 
-        # Log parsed data to inspect its structure if 'ppg' key is missing
         for item in parsed_data:
             if not all(key in item for key in ['ppg', 'acc', 'gyro', 'mag']):
-                # print(f"Unexpected data format: {item}")
-                continue  # Skip items that don't have all required keys
+                continue
 
-            # Buffer data if all keys are present
             self.ppg_buffer.append(item['ppg'])
             self.acc_buffer.append(item['acc'])
             self.gyro_buffer.append(item['gyro'])
             self.mag_buffer.append(item['mag'])
-            # self.update_data_display(str(item))
 
-        # Check if one second has passed
         current_timestamp = time.time()
         if current_timestamp - self.last_timestamp >= 1.0:
-            # self.process_and_print_data()
             self.process_and_print_data()
             self.last_timestamp = current_timestamp
 
-    import numpy as np
-    from scipy.interpolate import interp1d
-
     def process_and_print_data(self):
-        # Interpolate each buffer to 50 points, with support for 3D data
         def interpolate_data(buffer, num_points=50):
-            buffer = np.array(buffer)  # Ensure buffer is a NumPy array
+            buffer = np.array(buffer)
             if len(buffer) < 2:
-                # Handle 1D and 3D data by matching the shape of buffer
                 shape = (num_points,) + buffer.shape[1:] if buffer.ndim > 1 else (num_points,)
                 result = np.tile(buffer[0], shape) if len(buffer) > 0 else np.zeros(shape)
-                return np.round(result, decimals=3)  # Round to 3 decimal places
-
-            # Interpolation
+                return np.round(result, decimals=3)
             x = np.linspace(0, len(buffer) - 1, num=len(buffer))
             f = interp1d(x, buffer, kind='linear', axis=0, fill_value="extrapolate")
             x_new = np.linspace(0, len(buffer) - 1, num=num_points)
             result = f(x_new)
-            return np.round(result, decimals=3)  # Round to 3 decimal places
+            return np.round(result, decimals=3)
 
-        # Interpolate each sensor data to 50 points, or use a default value if it fails
         try:
             ppg_interp = interpolate_data(self.ppg_buffer, 50).tolist()
         except Exception as e:
             print(f"PPG interpolation error: {e}")
-            ppg_interp = [0] * 50  # Default to zeros if interpolation fails
+            ppg_interp = [0] * 50
 
         try:
             acc_interp = interpolate_data(self.acc_buffer, 50).tolist()
@@ -222,7 +213,6 @@ class BleController(QMainWindow):
             print(f"Mag interpolation error: {e}")
             mag_interp = [[0, 0, 0]] * 50
 
-        # Structure the result
         result = {
             "ppg": ppg_interp,
             "acc": acc_interp,
@@ -230,18 +220,15 @@ class BleController(QMainWindow):
             "mag": mag_interp
         }
 
-        # Print the structured result
-        # print("Result:", result)
-
-
-        hr_value, filter_list = self.hr_analyzer.update_hr(ppg_interp, acc_interp)
-        print(f"Heart Rate: {hr_value}")
-        print(f"Filter List: {filter_list}")
-
+        if self.hr_analyzer:
+            hr_value, filter_list = self.hr_analyzer.update_hr(ppg_interp, acc_interp)
+            print(f"Heart Rate: {hr_value:.2f}")
+            print(f"Filter List: {filter_list}")
+        else:
+            print("Pro 기능이 활성화되지 않음. 기본 기능만 사용합니다.")
 
         self.update_data_display("1 second data has been collected. Check your terminal.")
 
-        # Clear buffers after processing
         self.ppg_buffer.clear()
         self.acc_buffer.clear()
         self.gyro_buffer.clear()
@@ -287,13 +274,12 @@ class BleController(QMainWindow):
             await self.client.write_gatt_char(UUIDs().get_WRITE_UART_CHAR(), b"\nsetup ppg\n")
             self.timer.stop()
         else:
-            print('Connect device first.')
+            print("Connect device first.")
 
     def closeEvent(self, event):
         if self.client and self.client.is_connected:
             asyncio.run(self.client.disconnect())
         event.accept()
-
 
 if __name__ == "__main__":
     app = QApplication([])
@@ -303,3 +289,12 @@ if __name__ == "__main__":
     controller.show()
     with loop:
         loop.run_forever()
+
+
+# 기존 라이센스
+# f4bc3d9f-49f7-4246-a476-ce21ca153e90
+# cd2d150b-3d9d-4a45-a5cb-235cb32d3bfd
+
+
+# 안되는 라이센스
+# 1c274fa5-127c-4f52-9a21-2252735b1382
