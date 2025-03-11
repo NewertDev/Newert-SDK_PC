@@ -56,8 +56,8 @@ class BleController(QMainWindow):
         self.disable_button_state(True)
 
         # 라이선스는 선택사항입니다.
-        self.license_manager = ep.LicenseManager()  # subscribe_device() 메서드 포함
         self.user_license = input("Enter your license if available (press Enter to skip): ").strip()
+        self.license_manager = ep.LicenseManager()  # subscribe_device() 메서드 포함
         self.hr_analyzer = None
 
     def setup_ui(self):
@@ -292,9 +292,13 @@ if __name__ == "__main__":
 
 
 # 기존 라이센스
-# f4bc3d9f-49f7-4246-a476-ce21ca153e90
-# cd2d150b-3d9d-4a45-a5cb-235cb32d3bfd
+# 8d0eadd4-73f6-4368-94ad-3c81db176a67
+# A107
+
+# 61f95a5a-cf1c-47d0-a795-302666b85b27
+
 
 
 # 안되는 라이센스
 # 1c274fa5-127c-4f52-9a21-2252735b1382
+# f4bc3d9f-49f7-4246-a476-ce21ca153e90
