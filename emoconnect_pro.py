@@ -3,6 +3,55 @@ import numpy as np
 
 
 #########################################
+# 필터 클래스들 (이전 Flutter에서의 필터와 동일)
+#########################################
+class MovingAverageFilter:
+    def __init__(self, window_size):
+        self.window_size = window_size
+        self._values = []
+
+    def filter(self, new_value):
+        self._values.append(new_value)
+        if len(self._values) > self.window_size:
+            self._values.pop(0)
+        return np.mean(self._values)
+
+    def clear(self):
+        self._values.clear()
+
+
+class WeightedMovingAverageFilter:
+    def __init__(self, window_size):
+        self.window_size = window_size
+        self._values = []
+        self._weights = np.arange(1, window_size + 1)
+
+    def filter(self, new_value):
+        self._values.append(new_value)
+        if len(self._values) > self.window_size:
+            self._values.pop(0)
+
+        total_weight = np.sum(self._weights[:len(self._values)])
+        weighted_sum = np.dot(self._values, self._weights[:len(self._values)])
+
+        return weighted_sum / total_weight
+
+    def clear(self):
+        self._values.clear()
+
+
+def normalize_to_minus_one_to_one(data):
+    """
+    PPG 데이터를 -1 ~ 1 사이로 정규화
+    """
+    min_val = min(data)
+    max_val = max(data)
+    return [(2 * (x - min_val) / (max_val - min_val)) - 1 for x in data]
+
+
+
+
+#########################################
 # PeakDetector 클래스
 #########################################
 class PeakDetector:
@@ -114,6 +163,10 @@ class HeartRateAnalyzer:
         self.threshold1 = threshold1
         self.threshold2 = threshold2
         self.threshold3 = threshold3
+
+        self.filter = MovingAverageFilter(9)
+        self.wfilter = WeightedMovingAverageFilter(7)
+        self.filter2 = MovingAverageFilter(5)
 
     def calculate_stddev(self, values):
         mean = np.mean(values)
@@ -275,8 +328,22 @@ class HeartRateAnalyzer:
                         self.peak_bpm_values.append(bpm)
                         self.result_hr = np.mean(self.peak_bpm_values)
 
+
+                # 필터링 및 데이터 처리
+                normalized_ppg = normalize_to_minus_one_to_one(detrend_value)
+
+                # 필터링 적용
+                filtered_data = [self.filter.filter(value) for value in normalized_ppg[:50]]
+                wfiltered_data = [self.wfilter.filter(value) for value in filtered_data[:50]]
+                filtered_data2 = [self.filter2.filter(value) for value in wfiltered_data[:50]]
+
+                # 그래프 데이터 업데이트 (기본적인 그래프 데이터 처리)
+                filtered_ppg_data = filtered_data2  # 필터링된 50개의 PPG 데이터
+
+            else: filtered_ppg_data = []
+
             # 데이터 오버랩: 다음 2초 분석을 위해 최신 50개 샘플만 유지 (1초 중첩)
             self.ppg_array = self.ppg_array[-50:]
-            return self.result_hr, detrend_value
+            return self.result_hr, filtered_ppg_data
         else:
             return self.result_hr, []
