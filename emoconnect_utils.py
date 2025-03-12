@@ -1,5 +1,6 @@
 # emoconnect_utils.py
 import asyncio
+import struct
 
 
 class UUIDs:
@@ -74,11 +75,34 @@ class DataParser:
                 })
         return parsed_data
 
+
     def float16_to_float32(self, value):
         """
-        임시 변환 함수: 실제 변환 알고리즘으로 대체 필요.
-        현재는 단순히 입력 값을 float으로 변환합니다.
+        IEEE-754 16비트 부동소수점 값을 32비트 부동소수점 값으로 변환하는 함수.
         """
-        return float(value)
+        # 16비트 float 값을 부호, 지수, 가수로 나누어 처리
+        sign = (value >> 15) & 0x1  # 부호 비트 (1비트)
+        exponent = (value >> 10) & 0x1F  # 지수 비트 (5비트)
+        fraction = value & 0x3FF  # 가수 비트 (10비트)
+
+        # 지수가 0인 경우 (서브노멀 숫자 처리)
+        if exponent == 0:
+            # 서브노멀 숫자 처리를 위한 지수 조정
+            exponent = 0x1F
+            fraction = fraction * 8192  # 2^23 / 2^10 = 8192로 가수 값 조정
+        else:
+            # 지수가 0이 아니면, 지수 조정
+            exponent -= 15
+            exponent += 127  # 32비트 float의 지수 오프셋
+
+        # 32비트 float 형식으로 변환
+        # 1비트 부호, 8비트 지수, 23비트 가수로 구성
+        result = (sign << 31) | (exponent << 23) | (fraction << 13)
+
+        # struct를 이용하여 32비트 float 값으로 변환
+        float_value = struct.unpack('f', struct.pack('I', result))[0]
+
+        return float_value
+
 
 

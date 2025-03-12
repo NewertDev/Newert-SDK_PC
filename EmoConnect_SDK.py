@@ -10,7 +10,9 @@ from bleak import BleakScanner, BleakClient
 from scipy.interpolate import interp1d
 import numpy as np
 import emoconnect_pro as ep
+import license_pro as lp
 import emoconnect_utils as eu
+import csv
 
 class BleController(QMainWindow):
     def __init__(self):
@@ -59,7 +61,7 @@ class BleController(QMainWindow):
 
         # 라이선스는 선택사항입니다.
         self.user_license = input("Enter your license if available (press Enter to skip): ").strip()
-        self.license_manager = ep.LicenseManager()  # subscribe_device() 메서드 포함
+        self.license_manager = lp.LicenseManager()  # subscribe_device() 메서드 포함
         self.hr_analyzer = None
 
     def setup_ui(self):
@@ -191,28 +193,34 @@ class BleController(QMainWindow):
             result = f(x_new)
             return np.round(result, decimals=3)
 
-        try:
-            ppg_interp = interpolate_data(self.ppg_buffer, 50).tolist()
-        except Exception as e:
-            print(f"PPG interpolation error: {e}")
+        if len(self.ppg_buffer) >= 10:
+            try:
+                ppg_interp = interpolate_data(self.ppg_buffer, 50).tolist()
+            except Exception as e:
+                print(f"PPG interpolation error: {e}")
+                ppg_interp = [0] * 50
+
+            try:
+                acc_interp = interpolate_data(self.acc_buffer, 50).tolist()
+            except Exception as e:
+                print(f"ACC interpolation error: {e}")
+                acc_interp = [[0, 0, 0]] * 50
+
+            try:
+                gyro_interp = interpolate_data(self.gyro_buffer, 50).tolist()
+            except Exception as e:
+                print(f"Gyro interpolation error: {e}")
+                gyro_interp = [[0, 0, 0]] * 50
+
+            try:
+                mag_interp = interpolate_data(self.mag_buffer, 50).tolist()
+            except Exception as e:
+                print(f"Mag interpolation error: {e}")
+                mag_interp = [[0, 0, 0]] * 50
+        else:
             ppg_interp = [0] * 50
-
-        try:
-            acc_interp = interpolate_data(self.acc_buffer, 50).tolist()
-        except Exception as e:
-            print(f"ACC interpolation error: {e}")
             acc_interp = [[0, 0, 0]] * 50
-
-        try:
-            gyro_interp = interpolate_data(self.gyro_buffer, 50).tolist()
-        except Exception as e:
-            print(f"Gyro interpolation error: {e}")
             gyro_interp = [[0, 0, 0]] * 50
-
-        try:
-            mag_interp = interpolate_data(self.mag_buffer, 50).tolist()
-        except Exception as e:
-            print(f"Mag interpolation error: {e}")
             mag_interp = [[0, 0, 0]] * 50
 
         result = {
@@ -223,18 +231,24 @@ class BleController(QMainWindow):
         }
 
         if self.hr_analyzer:
+            # 심박수 값과 필터 리스트 업데이트
             hr_value, filter_list = self.hr_analyzer.update_hr(ppg_interp, acc_interp)
             print(f"Heart Rate: {hr_value:.2f}")
             print(f"Filter List: {filter_list}")
-        else:
-            print("Pro 기능이 활성화되지 않음. 기본 기능만 사용합니다.")
+            self.update_data_display("데이터 수집 완료. 터미널을 확인해주세요. 현재 Pro기능이 활성화 되었습니다. ")
 
-        self.update_data_display("1 second data has been collected. Check your terminal.")
+            with open("hr_values.csv", 'a') as f:
+                f.write(f"{hr_value}\n")
+
+        else:
+            self.update_data_display("데이터 수집 완료. 터미널을 확인해주세요.")
 
         self.ppg_buffer.clear()
         self.acc_buffer.clear()
         self.gyro_buffer.clear()
         self.mag_buffer.clear()
+
+        print(result)
 
     def disable_button_state(self, trigger):
         self.start_button.setDisabled(trigger)
@@ -294,7 +308,7 @@ if __name__ == "__main__":
 
 
 # 기존 라이센스
-# Lh&@d9-@;k8irljB{F]U
+# 8d0eadd4-73f6-4368-94ad-3c81db176a67
 # A107
 
 # 61f95a5a-cf1c-47d0-a795-302666b85b27
