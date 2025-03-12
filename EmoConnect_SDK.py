@@ -237,8 +237,6 @@ class BleController(QMainWindow):
             print(f"Filter List: {filter_list}")
             self.update_data_display("데이터 수집 완료. 터미널을 확인해주세요. 현재 Pro기능이 활성화 되었습니다. ")
 
-            with open("hr_values.csv", 'a') as f:
-                f.write(f"{hr_value}\n")
 
         else:
             self.update_data_display("데이터 수집 완료. 터미널을 확인해주세요.")
