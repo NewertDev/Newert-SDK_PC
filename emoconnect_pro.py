@@ -273,7 +273,7 @@ class EncryptedCacheManager:
             except Exception as e:
                 print("Error using os.chmod:", e)
             try:
-                subprocess.run("attrib -r " + self.cache_file, shell=True, check=True)
+                subprocess.run("attrib -r " + self.cache_file, shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 print("Error using attrib command:", e)
 

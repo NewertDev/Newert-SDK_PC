@@ -4,7 +4,7 @@ from bleak import BleakScanner, BleakClient
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QListWidget, QVBoxLayout, QHBoxLayout, \
     QWidget, QMessageBox
 from qasync import QEventLoop, asyncSlot
-from newert_utils import UUIDs, DataParser
+from emoconnect_utils import UUIDs, DataParser
 
 class BleController(QMainWindow):
     def __init__(self):

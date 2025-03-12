@@ -3,18 +3,20 @@ import time
 import requests
 import re
 from PySide6.QtCore import QTimer
-from bleak import BleakScanner, BleakClient
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QListWidget, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox
 from qasync import QEventLoop, asyncSlot
+from bleak import BleakScanner, BleakClient
 from scipy.interpolate import interp1d
 import numpy as np
 import emoconnect_pro as ep
-from newert_utils import UUIDs, DataParser
+import emoconnect_utils as eu
 
 class BleController(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("BLE 연결")
+        self.setWindowIcon(QIcon("images/app_icon.ico"))
         self.resize(1250, 500)
 
         # Material 스타일 적용
@@ -138,7 +140,7 @@ class BleController(QMainWindow):
             QMessageBox.information(self, "연결 성공", f"{address}에 성공적으로 연결되었습니다.")
             self.disable_button_state(False)
             self.device_label.setText(f'연결된 장비: {self.device_id} {self.address}')
-            await self.client.start_notify(UUIDs().get_READ_PPG_CHAR(), self.notification_handler)
+            await self.client.start_notify(eu.UUIDs().get_READ_PPG_CHAR(), self.notification_handler)
         except Exception as e:
             print(f"Error connecting to {address}: {e}")
 
@@ -155,7 +157,7 @@ class BleController(QMainWindow):
             QMessageBox.warning(self, "연결 해제 오류", "현재 연결된 장치가 없습니다.")
 
     def notification_handler(self, sender, data):
-        parser = DataParser()
+        parser = eu.DataParser()
         try:
             parsed_data = parser.parse_data(bytes(data))
         except Exception as e:
@@ -254,11 +256,11 @@ class BleController(QMainWindow):
     async def start_measure(self):
         if self.client and self.client.is_connected:
             try:
-                await self.client.write_gatt_char(UUIDs().get_WRITE_UART_CHAR(), b"\nset POWER_1V8 1\n")
+                await self.client.write_gatt_char(eu.UUIDs().get_WRITE_UART_CHAR(), b"\nset POWER_1V8 1\n")
                 await asyncio.sleep(0.1)
-                await self.client.write_gatt_char(UUIDs().get_WRITE_UART_CHAR(), b"\nset ppg_enable 1\n")
+                await self.client.write_gatt_char(eu.UUIDs().get_WRITE_UART_CHAR(), b"\nset ppg_enable 1\n")
                 await asyncio.sleep(0.1)
-                await self.client.write_gatt_char(UUIDs().get_WRITE_UART_CHAR(), b"\nsetup ppg\n")
+                await self.client.write_gatt_char(eu.UUIDs().get_WRITE_UART_CHAR(), b"\nsetup ppg\n")
                 await asyncio.sleep(0.1)
                 print("Message sent to device.")
             except Exception as e:
@@ -269,9 +271,9 @@ class BleController(QMainWindow):
     @asyncSlot()
     async def stop_measure(self):
         if self.client and self.client.is_connected:
-            await self.client.write_gatt_char(UUIDs().get_WRITE_UART_CHAR(), b"\nset ppg_enable 0\n")
+            await self.client.write_gatt_char(eu.UUIDs().get_WRITE_UART_CHAR(), b"\nset ppg_enable 0\n")
             await asyncio.sleep(0.1)
-            await self.client.write_gatt_char(UUIDs().get_WRITE_UART_CHAR(), b"\nsetup ppg\n")
+            await self.client.write_gatt_char(eu.UUIDs().get_WRITE_UART_CHAR(), b"\nsetup ppg\n")
             self.timer.stop()
         else:
             print("Connect device first.")
@@ -292,7 +294,7 @@ if __name__ == "__main__":
 
 
 # 기존 라이센스
-# 8d0eadd4-73f6-4368-94ad-3c81db176a67
+# Lh&@d9-@;k8irljB{F]U
 # A107
 
 # 61f95a5a-cf1c-47d0-a795-302666b85b27

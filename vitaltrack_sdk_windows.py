@@ -9,7 +9,7 @@ import numpy as np
 import time
 from newert_pro import HeartRateAnalyzer
 from license_manager import LicenseManager
-from newert_utils import UUIDs, DataParser
+from emoconnect_utils import UUIDs, DataParser
 
 class BleController(QMainWindow):
     def __init__(self):
